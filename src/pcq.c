@@ -1,5 +1,6 @@
 #include <pthread.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 #include "csesem.h"
 #include "pcq.h"
@@ -10,6 +11,11 @@
 struct PCQueue {
     int slots;
     void **queue;
+	pthread_mutex_t lock;
+	CSE_Semaphore has_space;
+	CSE_Semaphore has_data;
+	int head;
+	int tail;
 };
 
 /* The given implementation performs no error checking and simply
@@ -17,11 +23,42 @@ struct PCQueue {
  * (appropriately) semaphores, mutexes, condition variables, flags,
  * etc. in this function. */
 PCQueue pcq_create(int slots) {
+	if (slots <= 0) {
+		return NULL;
+	}
+
     PCQueue pcq;
 
     pcq = calloc(1, sizeof(*pcq));
+	if (pcq == NULL) {
+		return NULL;
+	}
+
     pcq->queue = calloc(slots, sizeof(void *));
     pcq->slots = slots;
+
+	if (pcq->queue == NULL) {
+		return NULL;
+	}
+
+	int ret_code;
+	ret_code = pthread_mutex_init(&pcq->lock, NULL);
+	if (ret_code != 0) {
+		return NULL;
+	}
+
+	pcq->has_space = csesem_create(slots);
+	if (pcq->has_space == NULL) {
+		return NULL;
+	}
+
+	pcq->has_data = csesem_create(0);
+	if (pcq->has_data == NULL) {
+		return NULL;
+	}
+
+	pcq->head = 0;
+	pcq->tail = 0;
 
     return pcq;
 }
@@ -30,12 +67,28 @@ PCQueue pcq_create(int slots) {
  * in the given struct PCQueue to even usefully insert a pointer into
  * the data structure. */
 void pcq_insert(PCQueue pcq, void *data) {
+	csesem_wait(pcq->has_space);
+	pthread_mutex_lock(&pcq->lock);	
+
+	pcq->queue[pcq->tail] = data;
+	pcq->tail = (pcq->tail + 1) % pcq->slots;
+
+	pthread_mutex_unlock(&pcq->lock);	
+	csesem_post(pcq->has_data);
 }
 
 /* This implementation does nothing, for the same reason as
  * pcq_insert(). */
 void *pcq_retrieve(PCQueue pcq) {
-    return NULL;
+	csesem_wait(pcq->has_data);
+	pthread_mutex_lock(&pcq->lock);
+
+	void *ret_addr = pcq->queue[pcq->head];
+	pcq->head = (pcq->head + 1) % pcq->slots;
+
+	pthread_mutex_unlock(&pcq->lock);
+	csesem_post(pcq->has_space);
+    return ret_addr;
 }
 
 /* The given implementation blindly frees the queue.  A minimal
@@ -50,6 +103,16 @@ void *pcq_retrieve(PCQueue pcq) {
  * at once!
  */
 void pcq_destroy(PCQueue pcq) {
+	int ret_code;
+	ret_code = pthread_mutex_destroy(&pcq->lock);
+	if (ret_code != 0) {
+		fprintf(stderr, "error happened on csesem_destroy(), whiel trying to destroy mutex\n");
+		return;
+	}
+
+	csesem_destroy(pcq->has_space);
+	//csesem_destroy(pcq->has_data);
+
     free(pcq->queue);
     free(pcq);
 }
