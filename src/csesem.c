@@ -1,6 +1,5 @@
 #include <pthread.h>
 #include <stdlib.h>
-#include <stdio.h>
 
 #include "csesem.h"
 
@@ -65,20 +64,19 @@ void csesem_wait(CSE_Semaphore sem) {
 /* This function should destroy any resources allocated for this
  * semaphore; this includes mutexes or condition variables. */
 void csesem_destroy(CSE_Semaphore sem) {
-	sem->count = 10000;
+	pthread_mutex_lock(&sem->lock);
+	sem->count = 2147483640; 
 	pthread_cond_broadcast(&sem->cond);
+	pthread_mutex_unlock(&sem->lock);
 
 	int ret_code = 0;
-
 	ret_code = pthread_cond_destroy(&sem->cond);
 	if (ret_code != 0) { 
-		fprintf(stderr, "error: csesem_destroy() while destroying cond\n");
 		return;
 	}
 
 	ret_code = pthread_mutex_destroy(&sem->lock);
 	if (ret_code != 0) { 
-		fprintf(stderr, "error: csesem_destroy() while destroying mutex\n");
 		return;
 	}
 	

@@ -1,6 +1,5 @@
 #include <pthread.h>
 #include <stdlib.h>
-#include <stdio.h>
 
 #include "csesem.h"
 #include "pcq.h"
@@ -103,15 +102,13 @@ void *pcq_retrieve(PCQueue pcq) {
  * at once!
  */
 void pcq_destroy(PCQueue pcq) {
-	int ret_code;
-	ret_code = pthread_mutex_destroy(&pcq->lock);
-	if (ret_code != 0) {
-		fprintf(stderr, "error happened on csesem_destroy(), whiel trying to destroy mutex\n");
-		return;
-	}
-
 	csesem_destroy(pcq->has_space);
 	csesem_destroy(pcq->has_data);
+
+	int ret_code = pthread_mutex_destroy(&pcq->lock);
+	if (ret_code != 0) {
+		return;
+	}
 
     free(pcq->queue);
     free(pcq);
