@@ -111,7 +111,7 @@ void pcq_destroy(PCQueue pcq) {
 	}
 
 	csesem_destroy(pcq->has_space);
-	//csesem_destroy(pcq->has_data);
+	csesem_destroy(pcq->has_data);
 
     free(pcq->queue);
     free(pcq);
